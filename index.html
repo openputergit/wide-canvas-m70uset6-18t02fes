@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aptitude Exam Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="min-h-screen">
+        <!-- Login Section -->
+        <div id="loginSection" class="container mx-auto px-4 py-8">
+            <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-bold mb-6 text-center">Aptitude Exam Portal</h2>
+                <div class="space-y-4">
+                    <select id="userType" class="w-full p-2 border rounded">
+                        <option value="">Select User Type</option>
+                        <option value="hr">HR</option>
+                        <option value="candidate">Candidate</option>
+                    </select>
+                    <input type="text" id="username" placeholder="Username" class="w-full p-2 border rounded">
+                    <input type="password" id="password" placeholder="Password" class="w-full p-2 border rounded">
+                    <button onclick="login()" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Login</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- HR Portal -->
+        <div id="hrPortal" class="container mx-auto px-4 py-8 hidden">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">HR Portal</h2>
+                    <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+                </div>
+                <div class="space-y-6">
+                    <!-- Question Form -->
+                    <div class="border-b pb-6">
+                        <h3 class="text-xl font-semibold mb-4">Add Question</h3>
+                        <div class="space-y-4">
+                            <textarea id="questionText" placeholder="Enter question" class="w-full p-2 border rounded"></textarea>
+                            <div class="grid grid-cols-2 gap-4">
+                                <input type="text" id="option1" placeholder="Option 1" class="p-2 border rounded">
+                                <input type="text" id="option2" placeholder="Option 2" class="p-2 border rounded">
+                                <input type="text" id="option3" placeholder="Option 3" class="p-2 border rounded">
+                                <input type="text" id="option4" placeholder="Option 4" class="p-2 border rounded">
+                            </div>
+                            <input type="number" id="correctOption" placeholder="Correct Option (1-4)" class="p-2 border rounded">
+                            <button onclick="addQuestion()" class="bg-green-500 text-white px-4 py-2 rounded">Add Question</button>
+                        </div>
+                    </div>
+
+                    <!-- Results Section -->
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4">Candidate Results</h3>
+                        <div id="candidateResults" class="space-y-4">
+                            <!-- Results will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Candidate Portal -->
+        <div id="candidatePortal" class="container mx-auto px-4 py-8 hidden">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">Aptitude Test</h2>
+                    <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded">Logout</button>
+                </div>
+                <div id="examSection" class="space-y-6">
+                    <div id="timer" class="text-xl font-bold text-center"></div>
+                    <div id="questions" class="space-y-6">
+                        <!-- Questions will be populated here -->
+                    </div>
+                    <button onclick="submitExam()" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Submit Exam</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const appSlug = 'aptitude-exam-123456';
+        let currentUser = null;
+        let examTimer = null;
+
+        async function login() {
+            const userType = document.getElementById('userType').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (!userType || !username || !password) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            currentUser = { type: userType, username };
+            document.getElementById('loginSection').classList.add('hidden');
+            
+            if (userType === 'hr') {
+                document.getElementById('hrPortal').classList.remove('hidden');
+                loadResults();
+            } else {
+                document.getElementById('candidatePortal').classList.remove('hidden');
+                startExam();
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            clearInterval(examTimer);
+            document.getElementById('loginSection').classList.remove('hidden');
+            document.getElementById('hrPortal').classList.add('hidden');
+            document.getElementById('candidatePortal').classList.add('hidden');
+        }
+
+        async function addQuestion() {
+            const questionText = document.getElementById('questionText').value;
+            const options = [
+                document.getElementById('option1').value,
+                document.getElementById('option2').value,
+                document.getElementById('option3').value,
+                document.getElementById('option4').value
+            ];
+            const correctOption = parseInt(document.getElementById('correctOption').value) - 1;
+
+            if (!questionText || options.some(opt => !opt) || isNaN(correctOption)) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer rlAQ7PhUzrfhnS3o63ATRcaupl42',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug,
+                        action: 'create',
+                        collection: 'questions',
+                        data: {
+                            question: questionText,
+                            options,
+                            correctOption
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Question added successfully');
+                    clearQuestionForm();
+                }
+            } catch (error) {
+                console.error('Error adding question:', error);
+                alert('Error adding question');
+            }
+        }
+
+        function clearQuestionForm() {
+            document.getElementById('questionText').value = '';
+            document.getElementById('option1').value = '';
+            document.getElementById('option2').value = '';
+            document.getElementById('option3').value = '';
+            document.getElementById('option4').value = '';
+            document.getElementById('correctOption').value = '';
+        }
+
+        async function startExam() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer rlAQ7PhUzrfhnS3o63ATRcaupl42',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug,
+                        action: 'read',
+                        collection: 'questions'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const questions = data.result;
+                    shuffleArray(questions);
+                    displayQuestions(questions);
+                    startTimer(30); // 30 minutes exam
+                }
+            } catch (error) {
+                console.error('Error starting exam:', error);
+                alert('Error loading questions');
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function displayQuestions(questions) {
+            const questionsContainer = document.getElementById('questions');
+            questionsContainer.innerHTML = questions.map((q, index) => `
+                <div class="question-container p-4 border rounded">
+                    <p class="font-semibold mb-2">${index + 1}. ${q.question}</p>
+                    <div class="space-y-2">
+                        ${q.options.map((opt, optIndex) => `
+                            <div class="flex items-center">
+                                <input type="radio" name="q${index}" value="${optIndex}" id="q${index}opt${optIndex}" class="mr-2">
+                                <label for="q${index}opt${optIndex}">${opt}</label>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function startTimer(minutes) {
+            const endTime = new Date().getTime() + minutes * 60 * 1000;
+            const timerElement = document.getElementById('timer');
+
+            examTimer = setInterval(() => {
+                const now = new Date().getTime();
+                const distance = endTime - now;
+
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                timerElement.innerHTML = `Time Remaining: ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+                if (distance < 0) {
+                    clearInterval(examTimer);
+                    submitExam();
+                }
+            }, 1000);
+        }
+
+        async function submitExam() {
+            clearInterval(examTimer);
+            const answers = [];
+            const questions = document.querySelectorAll('.question-container');
+            
+            questions.forEach((q, index) => {
+                const selected = document.querySelector(`input[name="q${index}"]:checked`);
+                answers.push(selected ? parseInt(selected.value) : -1);
+            });
+
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer rlAQ7PhUzrfhnS3o63ATRcaupl42',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug,
+                        action: 'create',
+                        collection: 'results',
+                        data: {
+                            candidate: currentUser.username,
+                            answers,
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Exam submitted successfully');
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error submitting exam:', error);
+                alert('Error submitting exam');
+            }
+        }
+
+        async function loadResults() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer rlAQ7PhUzrfhnS3o63ATRcaupl42',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug,
+                        action: 'read',
+                        collection: 'results'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    displayResults(data.result);
+                }
+            } catch (error) {
+                console.error('Error loading results:', error);
+                alert('Error loading results');
+            }
+        }
+
+        function displayResults(results) {
+            const resultsContainer = document.getElementById('candidateResults');
+            resultsContainer.innerHTML = results.map(result => `
+                <div class="bg-gray-50 p-4 rounded">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold">Candidate: ${result.candidate}</p>
+                            <p class="text-sm text-gray-600">Date: ${new Date(result.timestamp).toLocaleString()}</p>
+                        </div>
+                        <button onclick="selectCandidate('${result.candidate}')" class="bg-green-500 text-white px-3 py-1 rounded text-sm">
+                            Select Candidate
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function selectCandidate(candidate) {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer rlAQ7PhUzrfhnS3o63ATRcaupl42',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug,
+                        action: 'update',
+                        collection: 'results',
+                        conditions: { candidate },
+                        data: { selected: true }
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert(`Candidate ${candidate} has been selected`);
+                    loadResults();
+                }
+            } catch (error) {
+                console.error('Error selecting candidate:', error);
+                alert('Error selecting candidate');
+            }
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
